@@ -1,0 +1,129 @@
+import requests
+import json
+import os
+from typing import Any, Dict, List
+
+BASE_URL = "https://jsonplaceholder.typicode.com"
+CACHE_FILE = "cache.json"
+
+
+# ------------------------------
+# Cache Utilities
+# ------------------------------
+def load_cache() -> Dict[str, Any]:
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def save_cache(data: Dict[str, Any]):
+    with open(CACHE_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+
+# ------------------------------
+# Safe API Request
+# ------------------------------
+def safe_get(url: str) -> Any:
+    try:
+        response = requests.get(url, timeout=5)
+
+        if response.status_code != 200:
+            raise ValueError(f"Invalid response: {response.status_code}")
+
+        data = response.json()
+
+        if not data:
+            raise ValueError("Missing or malformed fields in response")
+
+        return data
+
+    except requests.exceptions.Timeout:
+        print("Error: Request timed out.")
+    except requests.exceptions.RequestException as e:
+        print(f"Network error: {e}")
+    except Exception as e:
+        print(f"Error: {e}")
+
+    return None
+
+
+# ------------------------------
+# Fetch from endpoints
+# ------------------------------
+def fetch_data(cache: Dict[str, Any]):
+    if "posts" not in cache:
+        cache["posts"] = safe_get(f"{BASE_URL}/posts")
+
+    if "users" not in cache:
+        cache["users"] = safe_get(f"{BASE_URL}/users")
+
+    save_cache(cache)
+    return cache
+
+
+# ------------------------------
+# List items with filter
+# ------------------------------
+def list_posts(posts: List[Dict[str, Any]], user_filter: int = None):
+    if user_filter:
+        posts = [p for p in posts if p.get("userId") == user_filter]
+
+    for p in posts[:10]:  # show only first 10
+        print(f"{p['id']}: {p['title']}")
+
+
+# ------------------------------
+# Detailed view
+# ------------------------------
+def show_post(posts: List[Dict[str, Any]], post_id: int):
+    item = next((p for p in posts if p["id"] == post_id), None)
+
+    if not item:
+        print("Item not found.")
+        return
+
+    print("\n=== POST DETAIL ===")
+    print(json.dumps(item, indent=4))
+
+
+# ------------------------------
+# CLI Interface
+# ------------------------------
+def main():
+    cache = load_cache()
+    cache = fetch_data(cache)
+
+    posts = cache.get("posts", [])
+
+    while True:
+        print("\n--- MENU ---")
+        print("1. List all posts")
+        print("2. List posts filtered by userId")
+        print("3. Show post by ID")
+        print("4. Exit")
+
+        choice = input("Enter choice: ")
+
+        if choice == "1":
+            list_posts(posts)
+
+        elif choice == "2":
+            uid = int(input("Enter userId (1–10): "))
+            list_posts(posts, uid)
+
+        elif choice == "3":
+            pid = int(input("Enter post ID (1–100): "))
+            show_post(posts, pid)
+
+        elif choice == "4":
+            break
+
+        else:
+            print("Invalid option.")
+
+
+if __name__ == "__main__":
+    main()
+
